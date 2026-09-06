@@ -13,7 +13,7 @@ A minimal question-and-answer bridge between a coding agent and Neovim.
 Install the command:
 
 ```sh
-go install github.com/vatsa/nvim-grill-me@latest
+go install github.com/WorldOccupier/nvim-grillme/cmd/grillme@latest
 ```
 
 Ensure Go's bin directory is on `PATH`, then install the Neovim plugin with
@@ -21,7 +21,7 @@ Lazy:
 
 ```lua
 {
-  "vatsa/nvim-grill-me",
+  "WorldOccupier/nvim-grillme",
   cmd = { "GrillMeOpen", "GrillMeSubmit" },
 }
 ```
@@ -57,7 +57,7 @@ plugin needs no path: `grillme ask` launches `nvim -c GrillMeOpen` directly.
 From this repository inside a Herdr pane, ask a question:
 
 ```sh
-go run . ask "What should happen when authentication expires?"
+go run ./cmd/grillme ask "What should happen when authentication expires?"
 ```
 
 The command creates a right-hand Herdr pane and starts your configured Neovim
@@ -71,6 +71,6 @@ A recommended answer appears in grey when one was provided. Type to replace it, 
 :GrillMeSubmit
 ```
 
-The waiting `go run` command prints the answer and exits. The dedicated Herdr
+The waiting `go run ./cmd/grillme` command prints the answer and exits. The dedicated Herdr
 pane closes after submission. Questions and answers are appended to
 `.grillme/session.jsonl`.

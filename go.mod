@@ -1,3 +1,3 @@
-module github.com/vatsa/nvim-grill-me
+module github.com/WorldOccupier/nvim-grillme
 
 go 1.26

@@ -6,7 +6,7 @@ QUESTIONS ?= \
 .PHONY: demo test
 
 demo:
-	@GRILLME_PLUGIN_PATH="$(CURDIR)" go run . ask $(QUESTIONS)
+	@GRILLME_PLUGIN_PATH="$(CURDIR)" go run ./cmd/grillme ask $(QUESTIONS)
 
 test:
 	@go test ./...

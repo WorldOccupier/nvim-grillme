@@ -37,10 +37,18 @@ Answers are printed to stdout in the same order as the questions, one answer at 
 
 The command must run inside a Herdr pane with `HERDR_PANE_ID` set. The `grillme` executable, `herdr`, and Neovim must be available, and the Neovim plugin must be installed.
 
-When developing this repository locally, use:
+Install `grillme` globally with:
 
 ```sh
-GRILLME_PLUGIN_PATH="$PWD" go run . ask "Your question"
+go install github.com/WorldOccupier/nvim-grillme/cmd/grillme@latest
+```
+
+Ensure Go's bin directory is on `PATH`. You can then run `grillme` from any project.
+
+For local development without installing the command, use:
+
+```sh
+GRILLME_PLUGIN_PATH="$PWD" go run ./cmd/grillme ask "Your question"
 ```
 
 If the command reports `not running inside a Herdr pane`, tell the user that GrillMe requires Herdr instead of retrying. If Neovim opens, wait for the user to submit rather than starting another request.
