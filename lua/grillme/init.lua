@@ -45,19 +45,34 @@ local function render(questions)
     return
   end
   state.questions = questions
-  local lines = { "GrillMe", "" }
+  local lines = { "# GrillMe", "", "_Write each answer below its heading, then press `<C-s>` to submit._", "" }
   if #questions == 0 then
-    table.insert(lines, "Waiting for a question…")
+    table.insert(lines, "> Waiting for a question…")
   end
   for index, question in ipairs(questions) do
-    vim.list_extend(lines, { ("Question %d:"):format(index), question.text, "", ("Answer %d:"):format(index), "" })
+    local question_lines = vim.split(question.text, "\n", { plain = true })
+    table.insert(lines, "## " .. question_lines[1])
+    if #question_lines > 1 then
+      vim.list_extend(lines, vim.list_slice(question_lines, 2))
+    end
+    vim.list_extend(lines, { "", "**Your answer:**", "```text", "", "```" })
+    if index < #questions then
+      vim.list_extend(lines, { "", "---", "" })
+    end
   end
   vim.api.nvim_buf_set_lines(state.buffer, 0, -1, false, lines)
   vim.bo[state.buffer].modified = false
   if #questions > 0 then
     local win = vim.fn.bufwinid(state.buffer)
     if win ~= -1 then
-      vim.api.nvim_win_set_cursor(win, { #lines, 0 })
+      local first_answer_line = 1
+      for line_index, line in ipairs(lines) do
+        if line == "```text" then
+          first_answer_line = line_index + 1
+          break
+        end
+      end
+      vim.api.nvim_win_set_cursor(win, { first_answer_line, 0 })
       vim.api.nvim_set_current_win(win)
       vim.cmd.startinsert()
     end
@@ -103,19 +118,24 @@ function M.submit()
   end
   local lines = vim.api.nvim_buf_get_lines(state.buffer, 0, -1, false)
   local answers = {}
-  for question_index = 1, #state.questions do
-    local first, last
-    for line_index, line in ipairs(lines) do
-      if line == ("Answer %d:"):format(question_index) then
-        first = line_index + 1
-      elseif first and line == ("Question %d:"):format(question_index + 1) then
-        last = line_index - 1
-        break
-      end
+  local question_index = 1
+  local waiting_for_fence = false
+  local first
+  for line_index, line in ipairs(lines) do
+    if not first and line == "**Your answer:**" then
+      waiting_for_fence = true
+    elseif waiting_for_fence and line == "```text" then
+      first = line_index + 1
+      waiting_for_fence = false
+    elseif first and line == "```" then
+      answers[question_index] = vim.trim(table.concat(vim.list_slice(lines, first, line_index - 1), "\n"))
+      question_index = question_index + 1
+      first = nil
     end
-    answers[question_index] = first and vim.trim(table.concat(vim.list_slice(lines, first, last), "\n")) or ""
   end
-  for index, answer in ipairs(answers) do
+  for index = 1, #state.questions do
+    local answer = answers[index] or ""
+    answers[index] = answer
     if answer == "" then
       vim.notify(("Answer %d cannot be empty"):format(index), vim.log.levels.WARN)
       return
