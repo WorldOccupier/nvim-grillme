@@ -27,6 +27,25 @@ func TestAnswerRoundTrip(t *testing.T) {
 	}
 }
 
+func TestParseQuestionsWithRecommendations(t *testing.T) {
+	questions, err := parseQuestions([]string{
+		"First?", "--recommended", "Use the default.",
+		"Second?", "--recommended", "No.",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(questions) != 2 || questions[0].RecommendedAnswer != "Use the default." || questions[1].Text != "Second?" {
+		t.Fatalf("got %#v", questions)
+	}
+}
+
+func TestParseQuestionsRejectsOrphanRecommendation(t *testing.T) {
+	if _, err := parseQuestions([]string{"--recommended", "No."}); err == nil {
+		t.Fatal("expected an error")
+	}
+}
+
 func TestSplitPaneID(t *testing.T) {
 	id, err := splitPaneID([]byte(`{"result":{"pane":{"pane_id":"w1:p2"}}}`))
 	if err != nil || id != "w1:p2" {

@@ -17,13 +17,17 @@ The session is done when the frontier is empty: every branch of the design tree 
 
 ## Ask questions
 
-Pass the whole frontier as separate quoted arguments. Number each question and include your recommended answer:
+Pass the whole frontier as separate quoted arguments. Put `--recommended` and its answer directly after each question:
 
 ```sh
 grillme ask \
-  "Which authentication method should we use?" \
-  "Should it be configurable?"
+  "1. Which authentication method should we use?" \
+  --recommended "Use passkeys with a recovery code." \
+  "2. Should it be configurable?" \
+  --recommended "No. Keep one authentication path."
 ```
+
+Neovim prefills each answer with the recommendation in grey. The user can edit or delete it like normal text, or submit it unchanged.
 
 Run the command with a long or disabled timeout. It is interactive and will not exit until the user submits answers.
 

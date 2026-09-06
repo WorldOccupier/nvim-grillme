@@ -10,10 +10,11 @@ import (
 )
 
 type question struct {
-	Type       string `json:"type"`
-	ID         string `json:"id,omitempty"`
-	QuestionID string `json:"question_id,omitempty"`
-	Text       string `json:"text"`
+	Type              string `json:"type"`
+	ID                string `json:"id,omitempty"`
+	QuestionID        string `json:"question_id,omitempty"`
+	Text              string `json:"text"`
+	RecommendedAnswer string `json:"recommended_answer,omitempty"`
 }
 
 func addQuestion(path string, question question) error {

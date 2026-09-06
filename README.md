@@ -29,7 +29,8 @@ Lazy:
 Tell your coding agent to ask questions with:
 
 ```sh
-grillme ask "What should happen when authentication expires?"
+grillme ask "What should happen when authentication expires?" \
+  --recommended "Clear the session and return to the sign-in screen."
 ```
 
 The command opens a right-hand Herdr pane containing your configured Neovim,
@@ -64,7 +65,7 @@ with `GrillMeOpen`. When running from this plugin repository, it loads the local
 plugin automatically; once installed, Neovim loads it through your plugin
 manager.
 
-Type beneath `Answer:` in Neovim, press `Esc`, then run:
+A recommended answer appears in grey when one was provided. Type to replace it, or leave it untouched to accept it. Press `Esc`, then run:
 
 ```vim
 :GrillMeSubmit

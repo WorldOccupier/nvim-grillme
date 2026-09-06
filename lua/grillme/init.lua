@@ -1,5 +1,7 @@
 local M = {}
 
+local recommendation_namespace = vim.api.nvim_create_namespace("grillme_recommendations")
+
 local state = {
   file = vim.fs.joinpath(vim.fn.getcwd(), ".grillme", "session.jsonl"),
   questions = {},
@@ -55,12 +57,35 @@ local function render(questions)
     if #question_lines > 1 then
       vim.list_extend(lines, vim.list_slice(question_lines, 2))
     end
-    vim.list_extend(lines, { "", "**Your answer:**", "```text", "", "```" })
+    vim.list_extend(lines, { "", "**Your answer:**", "```text" })
+    if question.recommended_answer and question.recommended_answer ~= "" then
+      vim.list_extend(lines, vim.split(question.recommended_answer, "\n", { plain = true }))
+    else
+      table.insert(lines, "")
+    end
+    table.insert(lines, "```")
     if index < #questions then
       vim.list_extend(lines, { "", "---", "" })
     end
   end
   vim.api.nvim_buf_set_lines(state.buffer, 0, -1, false, lines)
+  vim.api.nvim_buf_clear_namespace(state.buffer, recommendation_namespace, 0, -1)
+  local question_index = 1
+  for line_index, line in ipairs(lines) do
+    if line == "```text" then
+      local recommendation = questions[question_index].recommended_answer
+      if recommendation and recommendation ~= "" then
+        local recommendation_lines = vim.split(recommendation, "\n", { plain = true })
+        for offset, recommendation_line in ipairs(recommendation_lines) do
+          vim.api.nvim_buf_set_extmark(state.buffer, recommendation_namespace, line_index + offset - 1, 0, {
+            end_col = #recommendation_line,
+            hl_group = "Comment",
+          })
+        end
+      end
+      question_index = question_index + 1
+    end
+  end
   vim.bo[state.buffer].modified = false
   if #questions > 0 then
     local win = vim.fn.bufwinid(state.buffer)
