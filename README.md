@@ -47,7 +47,7 @@ make demo
 Or provide the question:
 
 ```sh
-make demo QUESTION="Which authentication method should we use?"
+make demo QUESTIONS='"Which authentication method should we use?" "Should it be configurable?"'
 ```
 
 `make demo` sets `GRILLME_PLUGIN_PATH` for local development. An installed

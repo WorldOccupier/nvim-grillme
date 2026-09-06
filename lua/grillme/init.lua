@@ -2,7 +2,7 @@ local M = {}
 
 local state = {
   file = vim.fs.joinpath(vim.fn.getcwd(), ".grillme", "session.jsonl"),
-  question = nil,
+  questions = {},
   buffer = nil,
   timer = nil,
 }
@@ -19,9 +19,9 @@ local function events()
   return result
 end
 
-local function pending_question()
+local function pending_questions()
   if vim.fn.filereadable(state.file) == 0 then
-    return nil
+    return {}
   end
   local questions, answered = {}, {}
   for _, value in ipairs(events()) do
@@ -31,30 +31,30 @@ local function pending_question()
       answered[value.question_id] = true
     end
   end
-  for index = #questions, 1, -1 do
-    local question = questions[index]
+  local pending = {}
+  for _, question in ipairs(questions) do
     if not answered[question.id] then
-      return question
+      table.insert(pending, question)
     end
   end
+  return pending
 end
 
-local function render(question)
+local function render(questions)
   if not state.buffer or not vim.api.nvim_buf_is_valid(state.buffer) then
     return
   end
-  state.question = question
-  local lines = question and {
-    "GrillMe",
-    "",
-    question.text,
-    "",
-    "Answer:",
-    "",
-  } or { "GrillMe", "", "Waiting for a question…" }
+  state.questions = questions
+  local lines = { "GrillMe", "" }
+  if #questions == 0 then
+    table.insert(lines, "Waiting for a question…")
+  end
+  for index, question in ipairs(questions) do
+    vim.list_extend(lines, { ("Question %d:"):format(index), question.text, "", ("Answer %d:"):format(index), "" })
+  end
   vim.api.nvim_buf_set_lines(state.buffer, 0, -1, false, lines)
   vim.bo[state.buffer].modified = false
-  if question then
+  if #questions > 0 then
     local win = vim.fn.bufwinid(state.buffer)
     if win ~= -1 then
       vim.api.nvim_win_set_cursor(win, { #lines, 0 })
@@ -65,9 +65,11 @@ local function render(question)
 end
 
 local function refresh()
-  local question = pending_question()
-  if (question and question.id) ~= (state.question and state.question.id) then
-    render(question)
+  local questions = pending_questions()
+  local ids = vim.tbl_map(function(question) return question.id end, questions)
+  local previous_ids = vim.tbl_map(function(question) return question.id end, state.questions)
+  if not vim.deep_equal(ids, previous_ids) then
+    render(questions)
   end
 end
 
@@ -88,7 +90,7 @@ function M.open()
   vim.bo[state.buffer].filetype = "markdown"
   vim.api.nvim_buf_set_name(state.buffer, "GrillMe")
   vim.keymap.set({ "n", "i" }, "<C-s>", M.submit, { buffer = state.buffer })
-  render(nil)
+  render({})
   refresh()
 
   state.timer = vim.uv.new_timer()
@@ -96,25 +98,35 @@ function M.open()
 end
 
 function M.submit()
-  if not state.question then
+  if #state.questions == 0 then
     return
   end
   local lines = vim.api.nvim_buf_get_lines(state.buffer, 0, -1, false)
-  local marker
-  for index, line in ipairs(lines) do
-    if line == "Answer:" then
-      marker = index
-      break
+  local answers = {}
+  for question_index = 1, #state.questions do
+    local first, last
+    for line_index, line in ipairs(lines) do
+      if line == ("Answer %d:"):format(question_index) then
+        first = line_index + 1
+      elseif first and line == ("Question %d:"):format(question_index + 1) then
+        last = line_index - 1
+        break
+      end
+    end
+    answers[question_index] = first and vim.trim(table.concat(vim.list_slice(lines, first, last), "\n")) or ""
+  end
+  for index, answer in ipairs(answers) do
+    if answer == "" then
+      vim.notify(("Answer %d cannot be empty"):format(index), vim.log.levels.WARN)
+      return
     end
   end
-  local answer = marker and vim.trim(table.concat(vim.list_slice(lines, marker + 1), "\n")) or ""
-  if answer == "" then
-    vim.notify("Answer cannot be empty", vim.log.levels.WARN)
-    return
-  end
-  local value = vim.json.encode({ type = "answer", question_id = state.question.id, text = answer })
   vim.fn.mkdir(vim.fs.dirname(state.file), "p")
-  vim.fn.writefile({ value }, state.file, "a")
+  local values = {}
+  for index, question in ipairs(state.questions) do
+    values[index] = vim.json.encode({ type = "answer", question_id = question.id, text = answers[index] })
+  end
+  vim.fn.writefile(values, state.file, "a")
   if vim.env.HERDR_PANE_ID then
     vim.system({ vim.env.HERDR_BIN_PATH or "herdr", "pane", "close", vim.env.HERDR_PANE_ID }, { detach = true })
   end
