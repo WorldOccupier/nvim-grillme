@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -90,7 +92,7 @@ func TestVersionDoesNotRequireHerdr(t *testing.T) {
 }
 
 func TestUnknownCommandAndMalformedAskAreUsageErrors(t *testing.T) {
-	for _, args := range [][]string{{"unknown"}, {"ask"}, {"ask", "Question?", "--recommended"}} {
+	for _, args := range [][]string{{"unknown"}, {"ask"}, {"ask", "Question?", "--recommended"}, {"ask", "--timeout", "invalid", "Question?"}} {
 		var stdout, stderr bytes.Buffer
 		if code := run(args, &stdout, &stderr); code != 2 {
 			t.Errorf("run(%q) exit code %d, want 2", args, code)
@@ -115,4 +117,91 @@ func TestSplitPaneID(t *testing.T) {
 	if err != nil || id != "w1:p2" {
 		t.Fatalf("got %q, %v", id, err)
 	}
+}
+
+func TestParseAskTimeout(t *testing.T) {
+	questions, timeout, err := parseAskArgs([]string{"--timeout", "10m", "Question?"})
+	if err != nil || timeout != 10*time.Minute || len(questions) != 1 {
+		t.Fatalf("got %#v, %v, %v", questions, timeout, err)
+	}
+	for _, value := range []string{"nope", "0s", "-1s"} {
+		if _, _, err := parseAskArgs([]string{"--timeout", value, "Question?"}); err == nil {
+			t.Errorf("expected %q to fail", value)
+		}
+	}
+}
+
+func TestAskTimeoutAndCancellationCloseCreatedPane(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		ctx  func() (context.Context, context.CancelFunc)
+		want string
+	}{
+		{"timeout", func() (context.Context, context.CancelFunc) {
+			return context.WithTimeout(context.Background(), time.Millisecond)
+		}, "timed out"},
+		{"cancellation", func() (context.Context, context.CancelFunc) {
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			return ctx, func() {}
+		}, "cancelled"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			withTempWorkingDirectory(t)
+			ctx, cancel := test.ctx()
+			defer cancel()
+			closed := ""
+			deps := askDependencies{
+				open:  func(string) (string, error) { return "created-pane", nil },
+				close: func(id string) error { closed = id; return errors.New("cleanup failed") },
+				find:  func(string, string) (string, error) { return "", nil },
+				poll:  time.Millisecond,
+			}
+			err := askWithDependencies(ctx, []question{{Text: "Question?"}}, &bytes.Buffer{}, deps)
+			if err == nil || !bytes.Contains([]byte(err.Error()), []byte(test.want)) {
+				t.Fatalf("got error %v", err)
+			}
+			if closed != "created-pane" {
+				t.Fatalf("closed pane %q", closed)
+			}
+		})
+	}
+}
+
+func TestAskPrintsAnswersInOrderWithoutCleanup(t *testing.T) {
+	withTempWorkingDirectory(t)
+	answers := []string{"First answer.", "Second answer."}
+	closed := false
+	var stdout bytes.Buffer
+	deps := askDependencies{
+		open:  func(string) (string, error) { return "created-pane", nil },
+		close: func(string) error { closed = true; return nil },
+		find: func(string, string) (string, error) {
+			answer := answers[0]
+			answers = answers[1:]
+			return answer, nil
+		},
+		poll: time.Millisecond,
+	}
+	if err := askWithDependencies(context.Background(), []question{{Text: "First?"}, {Text: "Second?"}}, &stdout, deps); err != nil {
+		t.Fatal(err)
+	}
+	if got := stdout.String(); got != "First answer.\nSecond answer.\n" {
+		t.Fatalf("got %q", got)
+	}
+	if closed {
+		t.Fatal("successful ask closed the pane")
+	}
+}
+
+func withTempWorkingDirectory(t *testing.T) {
+	t.Helper()
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(old) })
 }

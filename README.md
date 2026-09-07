@@ -41,7 +41,8 @@ grillme ask --help
 Tell your coding agent to ask questions with:
 
 ```sh
-grillme ask "What should happen when authentication expires?" \
+grillme ask --timeout 10m \
+  "What should happen when authentication expires?" \
   --recommended "Clear the session and return to the sign-in screen."
 ```
 
@@ -51,6 +52,10 @@ value applies to the question immediately before it.
 The command opens a right-hand Herdr pane containing your configured Neovim,
 then waits until you submit an answer. The answer is printed to stdout so the
 agent's command continues automatically.
+
+`--timeout` accepts a Go duration such as `1s`, `10m`, or `2h`. Without it, the
+wait has no time limit. A timeout, `Ctrl-C`, or `SIGTERM` stops the command with
+a nonzero exit code and closes only the Herdr pane created for that request.
 
 ## Manual test
 

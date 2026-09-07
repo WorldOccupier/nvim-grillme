@@ -1,20 +1,22 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
 const (
 	sessionDir  = ".grillme"
 	sessionFile = "session.jsonl"
-	pollDelay   = 150 * time.Millisecond
 )
 
 // Release builds can set these with -ldflags, for example:
@@ -23,38 +25,6 @@ var (
 	version = "devel"
 	commit  = ""
 )
-
-func parseQuestions(args []string) ([]question, error) {
-	var questions []question
-	for len(args) > 0 {
-		if args[0] == "--recommended" {
-			return nil, fmt.Errorf("--recommended must follow a question")
-		}
-		if strings.HasPrefix(args[0], "-") {
-			return nil, fmt.Errorf("unknown option %q", args[0])
-		}
-		item := question{Text: strings.TrimSpace(args[0])}
-		if item.Text == "" {
-			return nil, fmt.Errorf("question cannot be empty")
-		}
-		args = args[1:]
-		if len(args) > 0 && args[0] == "--recommended" {
-			if len(args) < 2 || strings.HasPrefix(args[1], "--") {
-				return nil, fmt.Errorf("--recommended requires an answer")
-			}
-			item.RecommendedAnswer = strings.TrimSpace(args[1])
-			if item.RecommendedAnswer == "" {
-				return nil, fmt.Errorf("recommended answer cannot be empty")
-			}
-			args = args[2:]
-		}
-		questions = append(questions, item)
-	}
-	if len(questions) == 0 {
-		return nil, fmt.Errorf("at least one question is required")
-	}
-	return questions, nil
-}
 
 func printTopHelp(w io.Writer) {
 	fmt.Fprint(w, `Usage: grillme <command> [options]
@@ -67,22 +37,6 @@ Commands:
   version  Print version information
 
 Run "grillme <command> --help" for command help.
-`)
-}
-
-func printAskHelp(w io.Writer) {
-	fmt.Fprint(w, `Usage: grillme ask <question> [--recommended <answer>] [question...]
-
-Ask one or more questions. Put --recommended and its answer directly after
-the question it belongs to.
-
-GrillMe requires Neovim 0.10 or later and Herdr 0.7.3 or later. The herdr
-executable must be on PATH unless HERDR_BIN_PATH is set.
-
-Examples:
-  grillme ask "Which database?"
-  grillme ask "Which database?" --recommended "Postgres"
-  grillme ask "Database?" --recommended "Postgres" "Enable backups?" --recommended "Yes"
 `)
 }
 
@@ -127,6 +81,10 @@ func versionString() string {
 }
 
 func run(args []string, stdout, stderr io.Writer) int {
+	return runContext(context.Background(), args, stdout, stderr)
+}
+
+func runContext(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		fmt.Fprintln(stderr, "grillme: a command is required")
 		fmt.Fprintln(stderr, "Run \"grillme --help\" for usage.")
@@ -155,13 +113,18 @@ func run(args []string, stdout, stderr io.Writer) int {
 			printAskHelp(stdout)
 			return 0
 		}
-		questions, err := parseQuestions(args[1:])
+		questions, timeout, err := parseAskArgs(args[1:])
 		if err != nil {
 			fmt.Fprintln(stderr, "grillme ask:", err)
 			fmt.Fprintln(stderr, "Run \"grillme ask --help\" for usage.")
 			return 2
 		}
-		if err := ask(questions, stdout); err != nil {
+		if timeout > 0 {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, timeout)
+			defer cancel()
+		}
+		if err := ask(ctx, questions, stdout); err != nil {
 			fmt.Fprintln(stderr, "grillme:", err)
 			return 1
 		}
@@ -205,43 +168,8 @@ func commandUsageError(w io.Writer, command, message string) int {
 	return 2
 }
 
-func ask(questions []question, stdout io.Writer) error {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-	if err := openGrillMePane(cwd); err != nil {
-		return err
-	}
-
-	path := filepath.Join(sessionDir, sessionFile)
-	ids := make([]string, len(questions))
-	for index, item := range questions {
-		ids[index] = fmt.Sprintf("%d-%d-%d", os.Getpid(), time.Now().UnixNano(), index)
-		item.Type = "question"
-		item.ID = ids[index]
-		item.Timestamp = time.Now().UTC().Format(time.RFC3339Nano)
-		if err := addQuestion(path, item); err != nil {
-			return err
-		}
-	}
-
-	for _, id := range ids {
-		for {
-			answer, err := findAnswer(path, id)
-			if err != nil {
-				return err
-			}
-			if answer != "" {
-				fmt.Fprintln(stdout, answer)
-				break
-			}
-			time.Sleep(pollDelay)
-		}
-	}
-	return nil
-}
-
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	os.Exit(runContext(ctx, os.Args[1:], os.Stdout, os.Stderr))
 }

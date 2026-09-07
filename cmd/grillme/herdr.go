@@ -17,9 +17,9 @@ const (
 	localNvimCommand     = `nvim -c 'execute "set runtimepath+=" . fnameescape($GRILLME_PLUGIN_PATH)' -c 'runtime plugin/grillme.lua' -c GrillMeOpen`
 )
 
-func openGrillMePane(cwd string) error {
+func openGrillMePane(cwd string) (string, error) {
 	if os.Getenv(herdrPaneIDEnv) == "" {
-		return errors.New("not running inside a Herdr pane")
+		return "", errors.New("not running inside a Herdr pane")
 	}
 
 	herdr := os.Getenv(herdrBinPathEnv)
@@ -34,11 +34,11 @@ func openGrillMePane(cwd string) error {
 
 	output, err := exec.Command(herdr, args...).Output()
 	if err != nil {
-		return fmt.Errorf("split Herdr pane: %w", err)
+		return "", fmt.Errorf("split Herdr pane: %w", err)
 	}
 	paneID, err := splitPaneID(output)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	command := installedNvimCommand
@@ -47,7 +47,18 @@ func openGrillMePane(cwd string) error {
 	}
 	if err := exec.Command(herdr, "pane", "run", paneID, command).Run(); err != nil {
 		_ = exec.Command(herdr, "pane", "close", paneID).Run()
-		return fmt.Errorf("start Neovim in Herdr pane: %w", err)
+		return "", fmt.Errorf("start Neovim in Herdr pane: %w", err)
+	}
+	return paneID, nil
+}
+
+func closeGrillMePane(paneID string) error {
+	herdr := os.Getenv(herdrBinPathEnv)
+	if herdr == "" {
+		herdr = herdrExecutable
+	}
+	if err := exec.Command(herdr, "pane", "close", paneID).Run(); err != nil {
+		return fmt.Errorf("close Herdr pane %s: %w", paneID, err)
 	}
 	return nil
 }

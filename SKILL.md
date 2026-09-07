@@ -29,7 +29,7 @@ grillme ask \
 
 Neovim opens in normal mode and prefills each answer with the recommendation in grey. The user can press `i` to edit or delete it, or submit it unchanged.
 
-Run the command with a long or disabled timeout. It is interactive and will not exit until the user submits answers.
+The command waits without a time limit by default. For a bounded session, add a Go duration such as `--timeout 30m`. A timeout, `Ctrl-C`, or `SIGTERM` stops the command and closes the question pane. Do not retry automatically after cancellation.
 
 Answers are printed to stdout in the same order as the questions, one answer at a time. Treat the full command output as user input and use it to continue the task.
 
