@@ -1,5 +1,7 @@
 # nvim-grill-me
 
+[![CI](https://github.com/WorldOccupier/nvim-grillme/actions/workflows/ci.yml/badge.svg)](https://github.com/WorldOccupier/nvim-grillme/actions/workflows/ci.yml)
+
 A minimal question-and-answer bridge between a coding agent and Neovim.
 
 ## Requirements

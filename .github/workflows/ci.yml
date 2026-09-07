@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Neovim 0.10.0
+        uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: v0.10.0
+
+      - name: Run Go tests
+        run: go test ./...
+
+      - name: Run Neovim tests
+        run: nvim --headless -l tests/grillme.lua
+
+      - name: Verify grillme installation
+        run: |
+          install_dir="$(mktemp -d)"
+          GOBIN="$install_dir" go install ./cmd/grillme
+          test -x "$install_dir/grillme"
