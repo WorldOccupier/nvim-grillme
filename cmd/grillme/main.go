@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -34,9 +35,44 @@ func parseQuestions(args []string) ([]question, error) {
 	return questions, nil
 }
 
+func printUsage() {
+	fmt.Fprintln(os.Stderr, "usage: grillme ask <question> [--recommended <answer>] [question...]")
+	fmt.Fprintln(os.Stderr, "       grillme clean [--older-than <duration>]")
+}
+
+func parseRetentionDuration(value string) (time.Duration, error) {
+	if strings.HasSuffix(value, "d") {
+		days, err := strconv.ParseFloat(strings.TrimSuffix(value, "d"), 64)
+		if err != nil {
+			return 0, err
+		}
+		return time.Duration(days * float64(24*time.Hour)), nil
+	}
+	return time.ParseDuration(value)
+}
+
 func main() {
+	if len(os.Args) >= 2 && os.Args[1] == "clean" {
+		var olderThan *time.Duration
+		if len(os.Args) == 4 && os.Args[2] == "--older-than" {
+			duration, err := parseRetentionDuration(os.Args[3])
+			if err != nil || duration < 0 {
+				fatal(fmt.Errorf("invalid --older-than duration %q", os.Args[3]))
+			}
+			olderThan = &duration
+		} else if len(os.Args) != 2 {
+			printUsage()
+			os.Exit(2)
+		}
+		removed, err := cleanSession(filepath.Join(sessionDir, sessionFile), olderThan, time.Now())
+		if err != nil {
+			fatal(err)
+		}
+		fmt.Printf("removed %d events\n", removed)
+		return
+	}
 	if len(os.Args) < 3 || os.Args[1] != "ask" {
-		fmt.Fprintln(os.Stderr, "usage: grillme ask <question> [--recommended <answer>] [question...]")
+		printUsage()
 		os.Exit(2)
 	}
 	questions, err := parseQuestions(os.Args[2:])
@@ -58,6 +94,7 @@ func main() {
 		ids[index] = fmt.Sprintf("%d-%d-%d", os.Getpid(), time.Now().UnixNano(), index)
 		item.Type = "question"
 		item.ID = ids[index]
+		item.Timestamp = time.Now().UTC().Format(time.RFC3339Nano)
 		if err := addQuestion(path, item); err != nil {
 			fatal(err)
 		}

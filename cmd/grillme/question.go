@@ -15,6 +15,7 @@ type question struct {
 	QuestionID        string `json:"question_id,omitempty"`
 	Text              string `json:"text"`
 	RecommendedAnswer string `json:"recommended_answer,omitempty"`
+	Timestamp         string `json:"timestamp,omitempty"`
 }
 
 func addQuestion(path string, question question) error {

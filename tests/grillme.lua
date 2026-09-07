@@ -32,5 +32,6 @@ grillme.submit()
 vim.cmd = command
 local events = vim.fn.readfile(".grillme/session.jsonl")
 assert(vim.json.decode(events[3]).text == "One.")
+assert(vim.json.decode(events[3]).timestamp:match("^%d%d%d%d%-%d%d%-%d%dT%d%d:%d%d:%d%dZ$"))
 assert(vim.json.decode(events[4]).text == "Two.")
 vim.cmd("qa!")

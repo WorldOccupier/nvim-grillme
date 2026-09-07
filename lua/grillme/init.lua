@@ -169,7 +169,12 @@ function M.submit()
   vim.fn.mkdir(vim.fs.dirname(state.file), "p")
   local values = {}
   for index, question in ipairs(state.questions) do
-    values[index] = vim.json.encode({ type = "answer", question_id = question.id, text = answers[index] })
+    values[index] = vim.json.encode({
+      type = "answer",
+      question_id = question.id,
+      text = answers[index],
+      timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+    })
   end
   vim.fn.writefile(values, state.file, "a")
   if vim.env.HERDR_PANE_ID then

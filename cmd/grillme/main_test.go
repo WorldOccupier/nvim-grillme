@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestAnswerRoundTrip(t *testing.T) {
@@ -43,6 +44,13 @@ func TestParseQuestionsWithRecommendations(t *testing.T) {
 func TestParseQuestionsRejectsOrphanRecommendation(t *testing.T) {
 	if _, err := parseQuestions([]string{"--recommended", "No."}); err == nil {
 		t.Fatal("expected an error")
+	}
+}
+
+func TestParseRetentionDurationInDays(t *testing.T) {
+	duration, err := parseRetentionDuration("7d")
+	if err != nil || duration != 7*24*time.Hour {
+		t.Fatalf("got %v, %v", duration, err)
 	}
 }
 
