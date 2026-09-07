@@ -23,7 +23,15 @@ type sessionLine struct {
 	event sessionEvent
 }
 
-func cleanSession(path string, olderThan *time.Duration, now time.Time) (int, error) {
+func cleanSession(path string, olderThan *time.Duration, now time.Time) (removed int, err error) {
+	err = withSessionLock(path, func() error {
+		removed, err = cleanSessionLocked(path, olderThan, now)
+		return err
+	})
+	return removed, err
+}
+
+func cleanSessionLocked(path string, olderThan *time.Duration, now time.Time) (int, error) {
 	lines, info, err := readSession(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return 0, nil

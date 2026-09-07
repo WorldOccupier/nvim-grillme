@@ -6,6 +6,7 @@ A minimal question-and-answer bridge between a coding agent and Neovim.
 
 ## Requirements
 
+- Linux or macOS
 - Go 1.26+
 - Neovim 0.10+
 - Herdr 0.7.3+
@@ -122,3 +123,9 @@ the answer timestamp. Legacy completed pairs without timestamps are removed by
 cannot be determined. Unknown event types are retained. If any line contains
 malformed JSON, cleanup reports its line number and leaves the file unchanged.
 Cleanup replaces the file atomically and sets its permissions to `0600`.
+
+The CLI and Neovim plugin serialize changes with an atomic
+`session.jsonl.lock` directory. This prevents asks, submissions, and cleanup
+from interleaving writes or replacing data another process just appended.
+Locks include the owner's process ID, so a later operation recovers a lock left
+by a process that was interrupted.

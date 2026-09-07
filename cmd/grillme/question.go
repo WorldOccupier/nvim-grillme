@@ -4,8 +4,8 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -22,20 +22,24 @@ func addQuestion(path string, question question) error {
 	if strings.TrimSpace(question.Text) == "" {
 		return errors.New("text cannot be empty")
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
 	data, err := json.Marshal(question)
 	if err != nil {
 		return err
 	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	_, err = f.Write(append(data, '\n'))
-	return err
+	return withSessionLock(path, func() error {
+		f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+		if err != nil {
+			return fmt.Errorf("open session file: %w", err)
+		}
+		if _, err := f.Write(append(data, '\n')); err != nil {
+			_ = f.Close()
+			return fmt.Errorf("append question: %w", err)
+		}
+		if err := f.Close(); err != nil {
+			return fmt.Errorf("close session file: %w", err)
+		}
+		return nil
+	})
 }
 
 func findAnswer(path, id string) (string, error) {

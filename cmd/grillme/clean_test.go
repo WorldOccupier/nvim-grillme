@@ -1,9 +1,13 @@
 package main
 
 import (
+	"bufio"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -93,5 +97,86 @@ func TestCleanSessionCanProduceEmptyFile(t *testing.T) {
 	got, _ := os.ReadFile(path)
 	if len(got) != 0 {
 		t.Fatalf("got %q", got)
+	}
+}
+
+func TestConcurrentAppendAndCleanupKeepCompleteEvents(t *testing.T) {
+	path := writeSession(t, "{\"type\":\"question\",\"id\":\"done\",\"text\":\"Done?\"}\n{\"type\":\"answer\",\"question_id\":\"done\",\"text\":\"Yes\"}\n")
+	const count = 40
+	var group sync.WaitGroup
+	for index := 0; index < count; index++ {
+		index := index
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			if err := addQuestion(path, question{Type: "question", ID: fmt.Sprintf("q%d", index), Text: "Pending?"}); err != nil {
+				t.Errorf("append question: %v", err)
+			}
+		}()
+	}
+	group.Add(1)
+	go func() {
+		defer group.Done()
+		if _, err := cleanSession(path, nil, time.Now()); err != nil {
+			t.Errorf("clean session: %v", err)
+		}
+	}()
+	group.Wait()
+
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	seen := make(map[string]bool)
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		var event sessionEvent
+		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
+			t.Fatalf("partial or malformed event %q: %v", scanner.Text(), err)
+		}
+		seen[event.ID] = true
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatal(err)
+	}
+	for index := 0; index < count; index++ {
+		if !seen[fmt.Sprintf("q%d", index)] {
+			t.Errorf("missing concurrently appended question q%d", index)
+		}
+	}
+}
+
+func TestSessionLockIsReleasedAfterMutationError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "session.jsonl")
+	want := fmt.Errorf("write failed")
+	if err := withSessionLock(path, func() error { return want }); err != want {
+		t.Fatalf("got %v, want %v", err, want)
+	}
+	lock, err := acquireSessionLock(path)
+	if err != nil {
+		t.Fatalf("lock was not released: %v", err)
+	}
+	if err := lock.release(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSessionLockRecoversIncompleteLockFromInterruptedProcess(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "session.jsonl")
+	lockPath := path + ".lock"
+	if err := os.Mkdir(lockPath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-incompleteLockAge - time.Second)
+	if err := os.Chtimes(lockPath, old, old); err != nil {
+		t.Fatal(err)
+	}
+	lock, err := acquireSessionLock(path)
+	if err != nil {
+		t.Fatalf("recover interrupted lock: %v", err)
+	}
+	if err := lock.release(); err != nil {
+		t.Fatal(err)
 	}
 }
