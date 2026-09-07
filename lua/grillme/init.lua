@@ -112,15 +112,37 @@ local function refresh()
   end
 end
 
+local function stop_timer(timer)
+  if not timer or timer:is_closing() then
+    return
+  end
+  timer:stop()
+  timer:close()
+  if state.timer == timer then
+    state.timer = nil
+  end
+end
+
+local function close_session(buffer, timer)
+  stop_timer(timer)
+  if state.buffer == buffer then
+    state.buffer = nil
+    state.questions = {}
+  end
+end
+
 function M.open()
   if state.buffer and vim.api.nvim_buf_is_valid(state.buffer) then
     local win = vim.fn.bufwinid(state.buffer)
     if win ~= -1 then
       vim.api.nvim_set_current_win(win)
-      return
+    else
+      vim.api.nvim_set_current_buf(state.buffer)
     end
+    return
   end
 
+  stop_timer(state.timer)
   vim.cmd("enew")
   state.buffer = vim.api.nvim_get_current_buf()
   vim.bo[state.buffer].buftype = "nofile"
@@ -132,8 +154,33 @@ function M.open()
   render({})
   refresh()
 
-  state.timer = vim.uv.new_timer()
-  state.timer:start(0, 150, vim.schedule_wrap(refresh))
+  local buffer = state.buffer
+  local timer = vim.uv.new_timer()
+  state.timer = timer
+
+  vim.api.nvim_create_autocmd({ "BufDelete", "BufWipeout" }, {
+    buffer = buffer,
+    once = true,
+    callback = function()
+      close_session(buffer, timer)
+    end,
+  })
+  vim.api.nvim_create_autocmd("VimLeavePre", {
+    once = true,
+    callback = function()
+      close_session(buffer, timer)
+    end,
+  })
+
+  timer:start(0, 150, function()
+    vim.schedule(function()
+      if state.buffer ~= buffer or state.timer ~= timer or timer:is_closing()
+          or not vim.api.nvim_buf_is_valid(buffer) then
+        return
+      end
+      refresh()
+    end)
+  end)
 end
 
 function M.submit()
@@ -176,6 +223,7 @@ function M.submit()
     })
   end
   vim.fn.writefile(values, state.file, "a")
+  close_session(state.buffer, state.timer)
   if vim.env.HERDR_PANE_ID then
     vim.system({ vim.env.HERDR_BIN_PATH or "herdr", "pane", "close", vim.env.HERDR_PANE_ID }, { detach = true })
   end

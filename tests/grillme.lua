@@ -9,8 +9,20 @@ vim.fn.writefile({
 }, ".grillme/session.jsonl")
 vim.opt.runtimepath:append(root)
 
+local function active_timer_count()
+  local count = 0
+  vim.uv.walk(function(handle)
+    if handle:get_type() == "timer" and not handle:is_closing() then
+      count = count + 1
+    end
+  end)
+  return count
+end
+
 local grillme = require("grillme")
+local timers_before_open = active_timer_count()
 grillme.open()
+assert(active_timer_count() == timers_before_open + 1)
 assert(vim.api.nvim_get_mode().mode == "n")
 assert(vim.deep_equal(vim.api.nvim_buf_get_lines(0, 0, -1, false), {
   "# GrillMe", "", "_Write each answer below its heading, then press `<C-s>` to submit._", "",
@@ -20,6 +32,23 @@ assert(vim.deep_equal(vim.api.nvim_buf_get_lines(0, 0, -1, false), {
 local marks = vim.api.nvim_buf_get_extmarks(0, -1, 0, -1, { details = true })
 assert(#marks == 1)
 assert(marks[1][4].hl_group == "Comment")
+
+local first_buffer = vim.api.nvim_get_current_buf()
+grillme.open()
+assert(vim.api.nvim_get_current_buf() == first_buffer)
+assert(active_timer_count() == timers_before_open + 1)
+vim.cmd("bdelete!")
+assert(not vim.api.nvim_buf_is_loaded(first_buffer))
+assert(active_timer_count() == timers_before_open)
+grillme.open()
+assert(vim.api.nvim_get_current_buf() ~= first_buffer)
+assert(active_timer_count() == timers_before_open + 1)
+assert(vim.deep_equal(vim.api.nvim_buf_get_lines(0, 0, -1, false), {
+  "# GrillMe", "", "_Write each answer below its heading, then press `<C-s>` to submit._", "",
+  "## First?", "", "**Your answer:**", "```text", "Use the default.", "```", "", "---", "",
+  "## Second?", "", "**Your answer:**", "```text", "", "```",
+}))
+
 vim.api.nvim_win_set_cursor(0, { 9, 0 })
 vim.cmd("normal! dd")
 assert(vim.api.nvim_buf_get_lines(0, 8, 9, false)[1] == "```")
