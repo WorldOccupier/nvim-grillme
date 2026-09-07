@@ -16,8 +16,13 @@ Install the command:
 go install github.com/WorldOccupier/nvim-grillme/cmd/grillme@latest
 ```
 
-Ensure Go's bin directory is on `PATH`, then install the Neovim plugin with
-Lazy:
+Ensure Go's bin directory is on `PATH`, then check the installed build:
+
+```sh
+grillme version
+```
+
+Install the Neovim plugin with Lazy:
 
 ```lua
 {
@@ -26,12 +31,22 @@ Lazy:
 }
 ```
 
+Inspect the available commands or ask-command syntax with:
+
+```sh
+grillme --help
+grillme ask --help
+```
+
 Tell your coding agent to ask questions with:
 
 ```sh
 grillme ask "What should happen when authentication expires?" \
   --recommended "Clear the session and return to the sign-in screen."
 ```
+
+Pass more question arguments to ask several at once. Each `--recommended`
+value applies to the question immediately before it.
 
 The command opens a right-hand Herdr pane containing your configured Neovim,
 then waits until you submit an answer. The answer is printed to stdout so the
