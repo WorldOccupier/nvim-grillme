@@ -9,13 +9,21 @@ vim.fn.writefile({
 }, ".grillme/session.jsonl")
 vim.opt.runtimepath:append(root)
 
+local timers = {}
+local new_timer = vim.uv.new_timer
+vim.uv.new_timer = function(...)
+  local timer = new_timer(...)
+  table.insert(timers, timer)
+  return timer
+end
+
 local function active_timer_count()
   local count = 0
-  vim.uv.walk(function(handle)
-    if handle:get_type() == "timer" and not handle:is_closing() then
+  for _, timer in ipairs(timers) do
+    if not timer:is_closing() then
       count = count + 1
     end
-  end)
+  end
   return count
 end
 
