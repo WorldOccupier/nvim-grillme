@@ -11,10 +11,10 @@ demo:
 
 test:
 	@go test ./...
-	@nvim --headless -l tests/grillme.lua
+	@for test in tests/session.lua tests/view.lua tests/grillme.lua; do nvim --headless -l $$test || exit; done
 
 check:
 	@go test -race ./...
 	@go vet ./...
-	@nvim --headless -l tests/grillme.lua
+	@for test in tests/session.lua tests/view.lua tests/grillme.lua; do nvim --headless -l $$test || exit; done
 	@git diff --check

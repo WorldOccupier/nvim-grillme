@@ -1,5 +1,11 @@
 {
   "bash": {
-    "make *": "allow"
+    "find *": "allow",
+    "grep *": "allow",
+    "head *": "allow",
+    "nvim *": "allow",
+    "printf *": "allow",
+    "pwd": "allow",
+    "sort *": "allow"
   }
 }
