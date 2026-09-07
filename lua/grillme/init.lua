@@ -99,7 +99,6 @@ local function render(questions)
       end
       vim.api.nvim_win_set_cursor(win, { first_answer_line, 0 })
       vim.api.nvim_set_current_win(win)
-      vim.cmd.startinsert()
     end
   end
 end

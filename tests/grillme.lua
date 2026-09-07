@@ -11,6 +11,7 @@ vim.opt.runtimepath:append(root)
 
 local grillme = require("grillme")
 grillme.open()
+assert(vim.api.nvim_get_mode().mode == "n")
 assert(vim.deep_equal(vim.api.nvim_buf_get_lines(0, 0, -1, false), {
   "# GrillMe", "", "_Write each answer below its heading, then press `<C-s>` to submit._", "",
   "## First?", "", "**Your answer:**", "```text", "Use the default.", "```", "", "---", "",

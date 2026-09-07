@@ -66,7 +66,7 @@ with `GrillMeOpen`. When running from this plugin repository, it loads the local
 plugin automatically; once installed, Neovim loads it through your plugin
 manager.
 
-A recommended answer appears in grey when one was provided. Type to replace it, or leave it untouched to accept it. Press `Esc`, then run:
+A recommended answer appears in grey when one was provided. Press `i` to edit it, or leave it untouched to accept it. Then run:
 
 ```vim
 :GrillMeSubmit

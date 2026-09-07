@@ -27,7 +27,7 @@ grillme ask \
   --recommended "No. Keep one authentication path."
 ```
 
-Neovim prefills each answer with the recommendation in grey. The user can edit or delete it like normal text, or submit it unchanged.
+Neovim opens in normal mode and prefills each answer with the recommendation in grey. The user can press `i` to edit or delete it, or submit it unchanged.
 
 Run the command with a long or disabled timeout. It is interactive and will not exit until the user submits answers.
 
