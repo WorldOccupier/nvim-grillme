@@ -32,11 +32,8 @@ jobs:
           neovim: true
           version: v0.10.0
 
-      - name: Run Go tests
-        run: go test ./...
-
-      - name: Run Neovim tests
-        run: nvim --headless -l tests/grillme.lua
+      - name: Run checks
+        run: make check
 
       - name: Verify grillme installation
         run: |

@@ -3,7 +3,7 @@ QUESTIONS ?= \
 	"Should retries use backoff?" --recommended "Yes. Use capped exponential backoff." \
 	"What should the user see?" --recommended "Show a brief error with a retry action."
 
-.PHONY: demo test
+.PHONY: check demo test
 
 demo:
 	@GRILLME_PLUGIN_PATH="$(CURDIR)" go run ./cmd/grillme ask $(QUESTIONS)
@@ -12,3 +12,9 @@ demo:
 test:
 	@go test ./...
 	@nvim --headless -l tests/grillme.lua
+
+check:
+	@go test -race ./...
+	@go vet ./...
+	@nvim --headless -l tests/grillme.lua
+	@git diff --check
