@@ -13,6 +13,7 @@ type question struct {
 	Type              string `json:"type"`
 	ID                string `json:"id,omitempty"`
 	QuestionID        string `json:"question_id,omitempty"`
+	SessionID         string `json:"session_id,omitempty"`
 	Text              string `json:"text"`
 	RecommendedAnswer string `json:"recommended_answer,omitempty"`
 	Timestamp         string `json:"timestamp,omitempty"`
@@ -42,7 +43,7 @@ func addQuestion(path string, question question) error {
 	})
 }
 
-func findAnswer(path, id string) (string, error) {
+func findAnswer(path, id, sessionID string) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return "", err
@@ -52,7 +53,7 @@ func findAnswer(path, id string) (string, error) {
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		var value question
-		if json.Unmarshal(scanner.Bytes(), &value) == nil && value.Type == "answer" && value.QuestionID == id {
+		if json.Unmarshal(scanner.Bytes(), &value) == nil && value.Type == "answer" && value.QuestionID == id && value.SessionID == sessionID {
 			return value.Text, nil
 		}
 	}

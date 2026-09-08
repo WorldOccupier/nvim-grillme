@@ -9,7 +9,7 @@ A minimal question-and-answer bridge between a coding agent and Neovim.
 - Linux or macOS
 - Go 1.26+
 - Neovim 0.10+
-- Herdr 0.7.3+
+- Herdr 0.7.3+ for the default launcher
 
 ## Install
 
@@ -52,9 +52,27 @@ grillme ask --timeout 10m \
 Pass more question arguments to ask several at once. Each `--recommended`
 value applies to the question immediately before it.
 
-The command opens a right-hand Herdr pane containing your configured Neovim,
-then waits until you submit an answer. The answer is printed to stdout so the
-agent's command continues automatically.
+The command asks a launcher to open the question UI, then waits until you
+submit an answer. The answer is printed to stdout so the agent's command
+continues automatically.
+
+## Launchers
+
+The ask flow uses a launcher to open and close its Neovim question pane. Herdr
+is the current launcher and remains the default. It opens a right-hand pane with
+the existing `35%` width and no-focus behavior.
+
+Set the launcher with `GRILLME_LAUNCHER`. The current accepted value is `herdr`:
+
+```sh
+GRILLME_LAUNCHER=herdr grillme ask "Which database?"
+```
+
+Leaving `GRILLME_LAUNCHER` unset preserves existing behavior. An unsupported
+value fails before GrillMe writes questions or opens a pane. `HERDR_BIN_PATH`,
+`HERDR_PANE_ID`, and `GRILLME_PLUGIN_PATH` keep their existing meanings. The
+launcher also passes `GRILLME_SESSION_ID` to the question pane so concurrent
+asks remain isolated.
 
 `--timeout` accepts a Go duration such as `1s`, `10m`, or `2h`. Without it, the
 wait has no time limit. A timeout, `Ctrl-C`, or `SIGTERM` stops the command with
@@ -100,8 +118,10 @@ pane closes after submission.
 
 ## Local data and cleanup
 
-GrillMe stores questions, recommended answers, answers, and timestamps in
-`.grillme/session.jsonl` under the current project. The directory is ignored by
+GrillMe stores questions, recommended answers, answers, timestamps, and a unique
+ID for each `ask` session in `.grillme/session.jsonl` under the current project.
+Each Neovim pane reads and submits only its session, so concurrent asks in the
+same project stay separate. The directory is ignored by
 this repository's Git configuration, but projects using GrillMe should also add
 `.grillme/` to their ignore file if the data should stay local.
 

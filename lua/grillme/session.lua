@@ -74,19 +74,23 @@ function M.read_events(file)
   return result
 end
 
-function M.pending_questions(file)
+function M.pending_questions(file, session_id)
   local questions, answered = {}, {}
+  local function event_key(value, id)
+    return (value.session_id or "") .. "\0" .. (id or "")
+  end
   for _, value in ipairs(M.read_events(file)) do
-    if value.type == "question" then
+    local in_session = session_id == nil or value.session_id == session_id
+    if in_session and value.type == "question" then
       table.insert(questions, value)
-    elseif value.type == "answer" then
-      answered[value.question_id] = true
+    elseif in_session and value.type == "answer" then
+      answered[event_key(value, value.question_id)] = true
     end
   end
 
   local pending = {}
   for _, question in ipairs(questions) do
-    if not answered[question.id] then
+    if not answered[event_key(question, question.id)] then
       table.insert(pending, question)
     end
   end
@@ -100,12 +104,16 @@ function M.append_answers(file, questions, answers)
       error("open session file: " .. err)
     end
     for index, question in ipairs(questions) do
-      local value = vim.json.encode({
+      local event = {
         type = "answer",
         question_id = question.id,
         text = answers[index],
         timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
-      })
+      }
+      if question.session_id then
+        event.session_id = question.session_id
+      end
+      local value = vim.json.encode(event)
       local ok, write_err = output:write(value, "\n")
       if not ok then
         output:close()

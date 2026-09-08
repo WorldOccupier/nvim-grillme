@@ -25,7 +25,7 @@ func TestAnswerRoundTrip(t *testing.T) {
 	if err := f.Close(); err != nil {
 		t.Fatal(err)
 	}
-	answer, err := findAnswer(path, "q1")
+	answer, err := findAnswer(path, "q1", "")
 	if err != nil || answer != "Answer." {
 		t.Fatalf("got %q, %v", answer, err)
 	}
@@ -152,10 +152,13 @@ func TestAskTimeoutAndCancellationCloseCreatedPane(t *testing.T) {
 			defer cancel()
 			closed := ""
 			deps := askDependencies{
-				open:  func(string) (string, error) { return "created-pane", nil },
-				close: func(id string) error { closed = id; return errors.New("cleanup failed") },
-				find:  func(string, string) (string, error) { return "", nil },
-				poll:  time.Millisecond,
+				launcher: &fakeLauncher{
+					open:  func(string, string) (string, error) { return "created-pane", nil },
+					close: func(id string) error { closed = id; return errors.New("cleanup failed") },
+				},
+				find:       func(string, string, string) (string, error) { return "", nil },
+				newSession: func() (string, error) { return "session-1", nil },
+				poll:       time.Millisecond,
 			}
 			err := askWithDependencies(ctx, []question{{Text: "Question?"}}, &bytes.Buffer{}, deps)
 			if err == nil || !bytes.Contains([]byte(err.Error()), []byte(test.want)) {
@@ -174,9 +177,12 @@ func TestAskPrintsAnswersInOrderWithoutCleanup(t *testing.T) {
 	closed := false
 	var stdout bytes.Buffer
 	deps := askDependencies{
-		open:  func(string) (string, error) { return "created-pane", nil },
-		close: func(string) error { closed = true; return nil },
-		find: func(string, string) (string, error) {
+		launcher: &fakeLauncher{
+			open:  func(string, string) (string, error) { return "created-pane", nil },
+			close: func(string) error { closed = true; return nil },
+		},
+		newSession: func() (string, error) { return "session-1", nil },
+		find: func(string, string, string) (string, error) {
 			answer := answers[0]
 			answers = answers[1:]
 			return answer, nil
@@ -192,6 +198,60 @@ func TestAskPrintsAnswersInOrderWithoutCleanup(t *testing.T) {
 	if closed {
 		t.Fatal("successful ask closed the pane")
 	}
+}
+
+func TestAskPassesSessionToPaneAndEvents(t *testing.T) {
+	withTempWorkingDirectory(t)
+	var openedSession string
+	deps := askDependencies{
+		launcher: &fakeLauncher{
+			open: func(_ string, sessionID string) (string, error) {
+				openedSession = sessionID
+				return "created-pane", nil
+			},
+			close: func(string) error { return nil },
+		},
+		newSession: func() (string, error) { return "session-1", nil },
+		find: func(path, id, sessionID string) (string, error) {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return "", err
+			}
+			if !bytes.Contains(data, []byte(`"session_id":"session-1"`)) || sessionID != "session-1" || id == "" {
+				return "", errors.New("question did not carry the generated session")
+			}
+			return "Answer.", nil
+		},
+		poll: time.Millisecond,
+	}
+	if err := askWithDependencies(context.Background(), []question{{Text: "Question?"}}, &bytes.Buffer{}, deps); err != nil {
+		t.Fatal(err)
+	}
+	if openedSession != "session-1" {
+		t.Fatalf("pane received session %q", openedSession)
+	}
+}
+
+func TestFindAnswerRequiresMatchingSession(t *testing.T) {
+	path := writeSession(t, "{\"type\":\"answer\",\"question_id\":\"q1\",\"session_id\":\"other\",\"text\":\"Wrong.\"}\n"+
+		"{\"type\":\"answer\",\"question_id\":\"q1\",\"session_id\":\"wanted\",\"text\":\"Right.\"}\n")
+	answer, err := findAnswer(path, "q1", "wanted")
+	if err != nil || answer != "Right." {
+		t.Fatalf("got %q, %v", answer, err)
+	}
+}
+
+type fakeLauncher struct {
+	open  func(string, string) (string, error)
+	close func(string) error
+}
+
+func (l *fakeLauncher) Open(cwd, sessionID string) (string, error) {
+	return l.open(cwd, sessionID)
+}
+
+func (l *fakeLauncher) Close(id string) error {
+	return l.close(id)
 }
 
 func withTempWorkingDirectory(t *testing.T) {

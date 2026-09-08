@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -71,8 +73,9 @@ the question it belongs to. By default, GrillMe waits without a limit. Use
 --timeout with a Go duration, such as 10m, to limit the wait. SIGINT and SIGTERM
 cancel the wait and close the pane created by this command.
 
-GrillMe requires Neovim 0.10 or later and Herdr 0.7.3 or later. The herdr
-executable must be on PATH unless HERDR_BIN_PATH is set.
+GrillMe requires Neovim 0.10 or later. The default launcher is Herdr 0.7.3 or
+later. Set GRILLME_LAUNCHER=herdr explicitly if needed. The herdr executable
+must be on PATH unless HERDR_BIN_PATH is set.
 
 Examples:
   grillme ask --timeout 10m "Which database?"
@@ -82,14 +85,26 @@ Examples:
 }
 
 type askDependencies struct {
-	open  func(string) (string, error)
-	close func(string) error
-	find  func(string, string) (string, error)
-	poll  time.Duration
+	launcher   launcher
+	find       func(string, string, string) (string, error)
+	newSession func() (string, error)
+	poll       time.Duration
+}
+
+func newSessionID() (string, error) {
+	value := make([]byte, 16)
+	if _, err := rand.Read(value); err != nil {
+		return "", fmt.Errorf("generate session ID: %w", err)
+	}
+	return hex.EncodeToString(value), nil
 }
 
 func ask(ctx context.Context, questions []question, stdout io.Writer) error {
-	return askWithDependencies(ctx, questions, stdout, askDependencies{openGrillMePane, closeGrillMePane, findAnswer, pollDelay})
+	selected, err := configuredLauncher()
+	if err != nil {
+		return err
+	}
+	return askWithDependencies(ctx, questions, stdout, askDependencies{selected, findAnswer, newSessionID, pollDelay})
 }
 
 func askWithDependencies(ctx context.Context, questions []question, stdout io.Writer, deps askDependencies) error {
@@ -97,14 +112,18 @@ func askWithDependencies(ctx context.Context, questions []question, stdout io.Wr
 	if err != nil {
 		return err
 	}
-	paneID, err := deps.open(cwd)
+	sessionID, err := deps.newSession()
+	if err != nil {
+		return err
+	}
+	paneID, err := deps.launcher.Open(cwd, sessionID)
 	if err != nil {
 		return err
 	}
 	completed := false
 	defer func() {
 		if !completed {
-			_ = deps.close(paneID)
+			_ = deps.launcher.Close(paneID)
 		}
 	}()
 
@@ -114,6 +133,7 @@ func askWithDependencies(ctx context.Context, questions []question, stdout io.Wr
 		ids[index] = fmt.Sprintf("%d-%d-%d", os.Getpid(), time.Now().UnixNano(), index)
 		item.Type = "question"
 		item.ID = ids[index]
+		item.SessionID = sessionID
 		item.Timestamp = time.Now().UTC().Format(time.RFC3339Nano)
 		if err := addQuestion(path, item); err != nil {
 			return err
@@ -122,7 +142,7 @@ func askWithDependencies(ctx context.Context, questions []question, stdout io.Wr
 
 	for _, id := range ids {
 		for {
-			answer, err := deps.find(path, id)
+			answer, err := deps.find(path, id, sessionID)
 			if err != nil {
 				return err
 			}

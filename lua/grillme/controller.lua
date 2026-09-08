@@ -5,6 +5,7 @@ local M = {}
 
 local state = {
   file = vim.fs.joinpath(vim.fn.getcwd(), ".grillme", "session.jsonl"),
+  session_id = vim.env.GRILLME_SESSION_ID,
   questions = {},
   buffer = nil,
   timer = nil,
@@ -43,7 +44,7 @@ local function render(questions)
 end
 
 local function refresh()
-  local questions = session.pending_questions(state.file)
+  local questions = session.pending_questions(state.file, state.session_id)
   local ids = vim.tbl_map(function(question) return question.id end, questions)
   local previous_ids = vim.tbl_map(function(question) return question.id end, state.questions)
   if not vim.deep_equal(ids, previous_ids) then
